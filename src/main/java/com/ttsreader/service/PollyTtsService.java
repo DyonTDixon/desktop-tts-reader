@@ -24,11 +24,15 @@ public class PollyTtsService implements AutoCloseable {
                 .build();
     }
 
-    public InputStream synthesize(String text, VoiceConfig config) {
+    public InputStream synthesize(String text, VoiceConfig config) throws IOException {
         List<String> chunks = splitIntoChunks(text, MAX_CHARS);
-        List<InputStream> audioStreams = new ArrayList<>();
+        ByteArrayOutputStream combinedAudio = new ByteArrayOutputStream();
 
         for (String chunk : chunks) {
+            if (Thread.currentThread().isInterrupted()) {
+                break;
+            }
+
             SynthesizeSpeechRequest request = SynthesizeSpeechRequest.builder()
                     .text(chunk)
                     .voiceId(config.voiceId())
@@ -36,11 +40,12 @@ public class PollyTtsService implements AutoCloseable {
                     .outputFormat(OutputFormat.MP3)
                     .build();
 
-            audioStreams.add(pollyClient.synthesizeSpeech(request));
+            // Downloads the MP3 bytes immediately and closes the HTTP connection cleanly
+            ResponseBytes<SynthesizeSpeechResponse> responseBytes = pollyClient.synthesizeSpeechAsBytes(request);
+            combinedAudio.write(responseBytes.asByteArray());
         }
 
-        // Stitch all MP3 streams together into one continuous stream
-        return new SequenceInputStream(Collections.enumeration(audioStreams));
+        return new ByteArrayInputStream(combinedAudio.toByteArray());
     }
 
     private List<String> splitIntoChunks(String text, int maxLength) {

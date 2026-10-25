@@ -18,6 +18,8 @@ import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import software.amazon.awssdk.services.polly.model.Engine;
 import software.amazon.awssdk.services.polly.model.VoiceId;
+import com.ttsreader.extractor.OcrScreenshotExtractor;
+import com.ttsreader.ui.ScreenSnipperOverlay;
 
 import java.io.File;
 import java.io.InputStream;
@@ -29,6 +31,8 @@ public class App extends Application {
     private final TextCleanerService textCleaner = new TextCleanerService();
     private final PollyTtsService pollyService = new PollyTtsService();
     private final AudioPlayerService audioPlayer = new AudioPlayerService();
+    private final OcrScreenshotExtractor ocrExtractor = new OcrScreenshotExtractor();
+    private final ScreenSnipperOverlay snipperOverlay = new ScreenSnipperOverlay();
 
     @Override
     public void start(Stage stage) {
@@ -88,6 +92,27 @@ public class App extends Application {
             } catch (Exception ex) {
                 statusLabel.setText("Error fetching URL: " + ex.getMessage());
             }
+        });
+
+        // 2b. Snip Screen (OCR) Button Action
+        btnSnip.setOnAction(e -> {
+            statusLabel.setText("Drag a box on screen to capture text (Press ESC to cancel)...");
+            snipperOverlay.show(stage, rect -> {
+                Platform.runLater(() -> {
+                    stage.setIconified(false);
+                    statusLabel.setText("Running OCR on captured screenshot...");
+                });
+                try {
+                    String raw = ocrExtractor.extractText(rect);
+                    String cleaned = textCleaner.clean(raw);
+                    Platform.runLater(() -> {
+                        textArea.setText(cleaned);
+                        statusLabel.setText("OCR extraction complete.");
+                    });
+                } catch (Exception ex) {
+                    Platform.runLater(() -> statusLabel.setText("OCR Error: " + ex.getMessage()));
+                }
+            });
         });
 
         // 3. Speak Button Action (AWS Polly + JLayer)
